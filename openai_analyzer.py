@@ -21,7 +21,7 @@ def extract_job_details(
     if not api_key:
         try:
             import streamlit as st
-            api_key = st.secrets.get("OPENAI_API_KEY")
+            api_key = st.secrets["OPENAI_API_KEY"]
         except:
             pass
     
@@ -116,7 +116,7 @@ def analyze_job_match(
     if not api_key:
         try:
             import streamlit as st
-            api_key = st.secrets.get("OPENAI_API_KEY")
+            api_key = st.secrets["OPENAI_API_KEY"]
         except:
             pass
     

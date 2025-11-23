@@ -118,8 +118,11 @@ with st.sidebar:
     # Check for API key in Streamlit secrets first, then environment
     api_key = None
     try:
-        api_key = st.secrets.get("OPENAI_API_KEY")
+        api_key = st.secrets["OPENAI_API_KEY"]
     except:
+        pass
+    
+    if not api_key:
         api_key = os.getenv("OPENAI_API_KEY")
     
     if api_key:
