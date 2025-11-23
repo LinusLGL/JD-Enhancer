@@ -127,12 +127,78 @@ def search_mycareersfuture(company_name: str, job_title: str) -> List[Dict]:
     """
     results = []
     
-    # Try multiple search variations
-    search_variations = [
-        f'"{company_name}" "{job_title}" site:mycareersfuture.gov.sg',
-        f'{company_name} {job_title} site:mycareersfuture.gov.sg',
-        f'site:mycareersfuture.gov.sg/job {company_name} {job_title}',
-    ]
+    # Strategy 1: Search for job title + company name broadly
+    try:
+        search_query = f"{job_title} {company_name}"
+        
+        url = "https://html.duckduckgo.com/html/"
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Content-Type': 'application/x-www-form-urlencoded'
+        }
+        
+        data = {
+            'q': search_query,
+            'b': '',
+            'kl': 'us-en'
+        }
+        
+        response = requests.post(url, headers=headers, data=data, timeout=15, verify=False)
+        
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Find all result divs
+            result_divs = soup.find_all('div', class_='result')
+            
+            for result_div in result_divs[:20]:
+                try:
+                    link_elem = result_div.find('a', class_='result__a')
+                    if not link_elem:
+                        continue
+                    
+                    job_url = link_elem.get('href', '')
+                    
+                    if 'mycareersfuture.gov.sg/job/' in job_url and 'companies' not in job_url:
+                        job_title_text = link_elem.text.strip()
+                        
+                        # Get snippet
+                        snippet_elem = result_div.find('a', class_='result__snippet')
+                        snippet = snippet_elem.text.strip() if snippet_elem else ''
+                        
+                        # Check if this matches our search (company name in snippet or URL)
+                        company_clean = company_name.lower().replace(' ', '').replace('.', '')
+                        snippet_clean = snippet.lower().replace(' ', '').replace('.', '')
+                        url_clean = job_url.lower()
+                        
+                        company_match = (company_clean in snippet_clean or 
+                                       company_name.lower() in url_clean or
+                                       company_name.lower() in job_title_text.lower())
+                        
+                        if company_match:
+                            results.append({
+                                'title': job_title_text,
+                                'company': company_name,
+                                'url': job_url,
+                                'source': 'mycareersfuture.gov.sg',
+                                'content': snippet
+                            })
+                            print(f"Found MyCareersFuture job via DDG: {job_title_text}")
+                            
+                except Exception as e:
+                    continue
+    
+    except Exception as e:
+        print(f"Error searching mycareersfuture via DuckDuckGo: {str(e)}")
+    
+    # Strategy 2: Try multiple search variations with different engines if DDG didn't find enough
+    if len(results) < 3:
+        search_variations = [
+            f'"{company_name}" "{job_title}" site:mycareersfuture.gov.sg',
+            f'{company_name} {job_title} site:mycareersfuture.gov.sg',
+            f'site:mycareersfuture.gov.sg/job {company_name} {job_title}',
+        ]
     
     for search_query in search_variations:
         if results:  # Stop if we found results
