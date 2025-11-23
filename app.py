@@ -7,13 +7,6 @@ from openai_analyzer import extract_job_details
 # Load environment variables
 load_dotenv()
 
-# For Streamlit Cloud deployment, load secrets
-if hasattr(st, 'secrets'):
-    try:
-        os.environ['OPENAI_API_KEY'] = st.secrets.get('OPENAI_API_KEY', os.getenv('OPENAI_API_KEY', ''))
-    except:
-        pass
-
 # Page configuration
 st.set_page_config(
     page_title="Job Description Enhancer",
@@ -122,12 +115,18 @@ with st.sidebar:
     """)
     
     st.header("⚙️ Setup")
-    api_key_set = bool(os.getenv("OPENAI_API_KEY"))
-    if api_key_set:
+    # Check for API key in Streamlit secrets first, then environment
+    api_key = None
+    try:
+        api_key = st.secrets.get("OPENAI_API_KEY")
+    except:
+        api_key = os.getenv("OPENAI_API_KEY")
+    
+    if api_key:
         st.success("✅ OpenAI API Key configured")
     else:
         st.error("❌ OpenAI API Key not found")
-        st.markdown("Set your `OPENAI_API_KEY` in the `.env` file")
+        st.markdown("Set your `OPENAI_API_KEY` in Streamlit secrets or `.env` file")
     
     st.header("📝 Example")
     st.markdown("""

@@ -14,9 +14,19 @@ def extract_job_details(
     """
     
     # Initialize OpenAI client
+    # Try to get API key from environment (works for both local .env and Streamlit secrets)
     api_key = os.getenv("OPENAI_API_KEY")
+    
+    # If not in environment, try Streamlit secrets directly
     if not api_key:
-        return "Error: OpenAI API key not configured. Please set OPENAI_API_KEY in your .env file."
+        try:
+            import streamlit as st
+            api_key = st.secrets.get("OPENAI_API_KEY")
+        except:
+            pass
+    
+    if not api_key:
+        return "Error: OpenAI API key not configured. Please set OPENAI_API_KEY in your Streamlit secrets or .env file."
     
     client = OpenAI(api_key=api_key)
     
@@ -101,6 +111,15 @@ def analyze_job_match(
     Optional: Analyze how well a candidate matches the job requirements
     """
     api_key = os.getenv("OPENAI_API_KEY")
+    
+    # If not in environment, try Streamlit secrets
+    if not api_key:
+        try:
+            import streamlit as st
+            api_key = st.secrets.get("OPENAI_API_KEY")
+        except:
+            pass
+    
     if not api_key:
         return {"error": "OpenAI API key not configured"}
     
