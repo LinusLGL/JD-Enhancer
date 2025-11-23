@@ -122,54 +122,121 @@ def search_careers_gov_sg(company_name: str, job_title: str) -> List[Dict]:
 def search_mycareersfuture(company_name: str, job_title: str) -> List[Dict]:
     """
     Search mycareersfuture.gov.sg for job postings
+    Note: MyCareersFuture is a JavaScript-rendered site which makes scraping difficult.
+    This function tries multiple search engine approaches.
     """
     results = []
-    try:
-        # Try the API approach first
-        search_query = f"{job_title} {company_name}"
-        
-        api_url = "https://api.mycareersfuture.gov.sg/v2/search"
-        
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'application/json'
-        }
-        
-        params = {
-            'search': search_query,
-            'limit': 20,
-            'sortBy': 'relevancy'
-        }
-        
-        response = requests.get(api_url, headers=headers, params=params, timeout=15, verify=False)
-        
-        if response.status_code == 200:
-            try:
-                data = response.json()
-                
-                if 'results' in data:
-                    for job in data['results'][:10]:  # Check top 10 results
-                        job_company = job.get('company', {}).get('name', '') if isinstance(job.get('company'), dict) else ''
-                        job_title_text = job.get('title', '')
-                        
-                        # More flexible matching
-                        company_match = company_name.lower().replace('of', '').replace('the', '').strip()
-                        job_company_clean = job_company.lower().replace('of', '').replace('the', '').strip()
-                        
-                        # Check if companies match (even partially)
-                        if any(word in job_company_clean for word in company_match.split() if len(word) > 3):
-                            results.append({
-                                'title': job_title_text,
-                                'company': job_company,
-                                'url': f"https://www.mycareersfuture.gov.sg/job/view/{job.get('uuid', '')}",
-                                'source': 'mycareersfuture.gov.sg',
-                                'content': job.get('description', '') or job.get('summary', '')
-                            })
-            except json.JSONDecodeError:
-                print("Error parsing MyCareersFuture JSON response")
     
-    except Exception as e:
-        print(f"Error searching mycareersfuture: {str(e)}")
+    # Try multiple search variations
+    search_variations = [
+        f'"{company_name}" "{job_title}" site:mycareersfuture.gov.sg',
+        f'{company_name} {job_title} site:mycareersfuture.gov.sg',
+        f'site:mycareersfuture.gov.sg/job {company_name} {job_title}',
+    ]
+    
+    for search_query in search_variations:
+        if results:  # Stop if we found results
+            break
+            
+        # Try Bing
+        try:
+            encoded_query = quote_plus(search_query)
+            url = f"https://www.bing.com/search?q={encoded_query}&count=20"
+            
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+            }
+            
+            response = requests.get(url, headers=headers, timeout=15, verify=False)
+            
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.content, 'html.parser')
+                search_results = soup.find_all('li', class_='b_algo')
+                
+                for result in search_results[:10]:
+                    try:
+                        link_elem = result.find('a')
+                        if not link_elem:
+                            continue
+                        
+                        job_url = link_elem.get('href', '')
+                        
+                        if 'mycareersfuture.gov.sg/job' in job_url:
+                            title_elem = result.find('h2')
+                            title = title_elem.text.strip() if title_elem else job_title
+                            
+                            snippet_elem = result.find('p')
+                            snippet = snippet_elem.text.strip() if snippet_elem else ''
+                            
+                            # Check if company name appears in title or snippet
+                            if company_name.lower() in title.lower() or company_name.lower() in snippet.lower():
+                                results.append({
+                                    'title': title,
+                                    'company': company_name,
+                                    'url': job_url,
+                                    'source': 'mycareersfuture.gov.sg',
+                                    'content': snippet
+                                })
+                                print(f"Found MyCareersFuture job via Bing: {title}")
+                    except Exception as e:
+                        continue
+        
+        except Exception as e:
+            print(f"Error searching mycareersfuture via Bing: {str(e)}")
+        
+        # Try Google if Bing didn't work
+        if not results:
+            try:
+                encoded_query = quote_plus(search_query)
+                url = f"https://www.google.com/search?q={encoded_query}&num=20&hl=en"
+                
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Referer': 'https://www.google.com/'
+                }
+                
+                response = requests.get(url, headers=headers, timeout=15, verify=False)
+                
+                if response.status_code == 200:
+                    soup = BeautifulSoup(response.content, 'html.parser')
+                    search_results = soup.find_all('div', class_='g')
+                    
+                    for result in search_results[:10]:
+                        try:
+                            link_elem = result.find('a')
+                            if not link_elem:
+                                continue
+                            
+                            job_url = link_elem.get('href', '')
+                            
+                            if 'mycareersfuture.gov.sg/job' in job_url:
+                                title_elem = result.find('h3')
+                                title = title_elem.text.strip() if title_elem else job_title
+                                
+                                snippet_elem = result.find('div', class_='VwiC3b')
+                                if not snippet_elem:
+                                    snippet_elem = result.find('span', class_='aCOpRe')
+                                snippet = snippet_elem.text.strip() if snippet_elem else ''
+                                
+                                # Check if company name appears in title or snippet
+                                if company_name.lower() in title.lower() or company_name.lower() in snippet.lower():
+                                    results.append({
+                                        'title': title,
+                                        'company': company_name,
+                                        'url': job_url,
+                                        'source': 'mycareersfuture.gov.sg',
+                                        'content': snippet
+                                    })
+                                    print(f"Found MyCareersFuture job via Google: {title}")
+                        except Exception as e:
+                            continue
+            
+            except Exception as e:
+                print(f"Error searching mycareersfuture via Google: {str(e)}")
     
     return results
 
