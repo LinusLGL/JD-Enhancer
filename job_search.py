@@ -10,6 +10,38 @@ import warnings
 # Suppress SSL warnings
 warnings.filterwarnings('ignore', message='Unverified HTTPS request')
 
+def search_careers_gov_sg_direct(company_name: str, job_title: str) -> List[Dict]:
+    """
+    Direct search on careers.gov.sg by analyzing their website structure
+    This bypasses search engines which may be blocked on cloud platforms
+    """
+    results = []
+    
+    try:
+        # careers.gov.sg is a React/SPA site - try to find their data source
+        # Method 1: Try accessing their internal API if it exists
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'application/json'
+        }
+        
+        # Build search keywords
+        keywords = f"{job_title} {company_name}".lower().split()
+        keywords = [k for k in keywords if len(k) > 2]  # Remove short words
+        
+        print(f"Direct search with keywords: {keywords}")
+        
+        # Note: careers.gov.sg is a complex SPA, but we know the URL pattern
+        # URLs follow: https://jobs.careers.gov.sg/jobs/hrp/{job_id}/{uuid}
+        # For now, return empty and rely on search engines
+        # This is a placeholder for future enhancement
+        
+    except Exception as e:
+        print(f"Error in direct careers.gov.sg search: {str(e)}")
+    
+    return results
+
+
 def search_careers_gov_sg(company_name: str, job_title: str) -> List[Dict]:
     """
     Search jobs.careers.gov.sg for job postings using multiple methods
@@ -19,7 +51,7 @@ def search_careers_gov_sg(company_name: str, job_title: str) -> List[Dict]:
     
     # Check if this is likely a government agency/ministry
     gov_keywords = ['ministry', 'agency', 'authority', 'board', 'department', 'council', 
-                    'commission', 'force', 'service', 'office', 'government', 'technology']
+                    'commission', 'force', 'service', 'office', 'government', 'technology', 'centre', 'center']
     is_likely_gov = any(keyword in company_name.lower() for keyword in gov_keywords)
     
     # Skip if not a government entity (careers.gov.sg is for government jobs only)
@@ -36,8 +68,12 @@ def search_careers_gov_sg(company_name: str, job_title: str) -> List[Dict]:
         url = "https://html.duckduckgo.com/html/"
         
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Content-Type': 'application/x-www-form-urlencoded'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Referer': 'https://duckduckgo.com/'
         }
         
         data = {
@@ -46,13 +82,16 @@ def search_careers_gov_sg(company_name: str, job_title: str) -> List[Dict]:
             'kl': 'us-en'
         }
         
-        response = requests.post(url, headers=headers, data=data, timeout=15, verify=False)
+        response = requests.post(url, headers=headers, data=data, timeout=20, verify=False, allow_redirects=True)
+        
+        print(f"DuckDuckGo POST response: {response.status_code}, length: {len(response.content)}")
         
         if response.status_code == 200:
             soup = BeautifulSoup(response.content, 'html.parser')
             
             # Find DuckDuckGo results
             search_results = soup.find_all('div', class_='result')
+            print(f"Found {len(search_results)} result divs from DuckDuckGo")
             
             for result in search_results[:10]:
                 try:
@@ -85,6 +124,7 @@ def search_careers_gov_sg(company_name: str, job_title: str) -> List[Dict]:
     
     # Method 2: Try Google if DuckDuckGo didn't work
     if not results:
+        print("Trying Google search...")
         try:
             search_query = f"site:careers.gov.sg {job_title} {company_name}"
             encoded_query = quote_plus(search_query)
@@ -95,9 +135,12 @@ def search_careers_gov_sg(company_name: str, job_title: str) -> List[Dict]:
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Referer': 'https://www.google.com/'
             }
             
-            response = requests.get(url, headers=headers, timeout=15, verify=False)
+            response = requests.get(url, headers=headers, timeout=20, verify=False, allow_redirects=True)
+            print(f"Google response: {response.status_code}")
             
             if response.status_code == 200:
                 soup = BeautifulSoup(response.content, 'html.parser')
