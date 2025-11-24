@@ -83,7 +83,59 @@ def search_careers_gov_sg(company_name: str, job_title: str) -> List[Dict]:
     except Exception as e:
         print(f"Error searching careers.gov.sg via DuckDuckGo POST: {str(e)}")
     
-    # Method 2: Try Bing if DuckDuckGo didn't work
+    # Method 2: Try Google if DuckDuckGo didn't work
+    if not results:
+        try:
+            search_query = f"site:careers.gov.sg {job_title} {company_name}"
+            encoded_query = quote_plus(search_query)
+            
+            url = f"https://www.google.com/search?q={encoded_query}&num=20"
+            
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+            }
+            
+            response = requests.get(url, headers=headers, timeout=15, verify=False)
+            
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.content, 'html.parser')
+                
+                # Find Google search results
+                search_results = soup.find_all('div', class_='g')
+                
+                for result in search_results[:10]:
+                    try:
+                        link_elem = result.find('a')
+                        if not link_elem:
+                            continue
+                        
+                        job_url = link_elem.get('href', '')
+                        
+                        # Check if it's a careers.gov.sg job URL
+                        if 'careers.gov.sg' in job_url and '/jobs/' in job_url:
+                            title_elem = result.find('h3')
+                            title = title_elem.text.strip() if title_elem else job_title
+                            
+                            snippet_elem = result.find('div', class_='VwiC3b')
+                            snippet = snippet_elem.text.strip() if snippet_elem else ''
+                            
+                            results.append({
+                                'title': title,
+                                'company': company_name,
+                                'url': job_url,
+                                'source': 'jobs.careers.gov.sg',
+                                'content': snippet
+                            })
+                            print(f"Found careers.gov.sg job via Google: {title}")
+                    except Exception as e:
+                        continue
+        
+        except Exception as e:
+            print(f"Error searching careers.gov.sg via Google: {str(e)}")
+    
+    # Method 3: Try Bing if DuckDuckGo and Google didn't work
     if not results:
         try:
             search_query = f"site:careers.gov.sg {job_title} {company_name}"
@@ -134,6 +186,73 @@ def search_careers_gov_sg(company_name: str, job_title: str) -> List[Dict]:
         
         except Exception as e:
             print(f"Error searching careers.gov.sg via Bing: {str(e)}")
+    
+    # Method 4: If still no results, try searching with just the job title (broader search)
+    if not results:
+        print(f"Trying broader search with just job title: {job_title}")
+        try:
+            search_query = f"site:careers.gov.sg {job_title}"
+            
+            url = "https://html.duckduckgo.com/html/"
+            
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+            
+            data = {
+                'q': search_query,
+                'b': '',
+                'kl': 'us-en'
+            }
+            
+            response = requests.post(url, headers=headers, data=data, timeout=15, verify=False)
+            
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.content, 'html.parser')
+                
+                # Find DuckDuckGo results
+                search_results = soup.find_all('div', class_='result')
+                
+                for result in search_results[:15]:  # Get more results for filtering
+                    try:
+                        link_elem = result.find('a', class_='result__a')
+                        if not link_elem:
+                            continue
+                        
+                        job_url = link_elem.get('href', '')
+                        
+                        # Check if it's a careers.gov.sg job URL
+                        if 'careers.gov.sg' in job_url and '/jobs/' in job_url:
+                            title = link_elem.text.strip() if link_elem else job_title
+                            
+                            snippet_elem = result.find('a', class_='result__snippet')
+                            snippet = snippet_elem.text.strip() if snippet_elem else ''
+                            
+                            # Check if company name appears in title or snippet
+                            company_lower = company_name.lower()
+                            title_lower = title.lower()
+                            snippet_lower = snippet.lower()
+                            
+                            # Be flexible with company name matching
+                            company_words = company_lower.split()
+                            match_score = sum(1 for word in company_words if len(word) > 3 and (word in title_lower or word in snippet_lower))
+                            
+                            # If we have a decent match or if it's early in results, include it
+                            if match_score >= len(company_words) / 2 or len(results) < 3:
+                                results.append({
+                                    'title': title,
+                                    'company': company_name,
+                                    'url': job_url,
+                                    'source': 'jobs.careers.gov.sg',
+                                    'content': snippet
+                                })
+                                print(f"Found careers.gov.sg job via broader search: {title}")
+                    except Exception as e:
+                        continue
+        
+        except Exception as e:
+            print(f"Error searching careers.gov.sg with broader search: {str(e)}")
     
     return results
 
